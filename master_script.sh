@@ -110,7 +110,7 @@ for file in `ls ../trf/*.sorted.als5.c18.mdat`; do
     while read motif; do
         echo "cd $motif" >> ${species}_1-prepare-flank-15bp.sh
         echo "awk -v motif="'"'$motif'"' "'" '$18==motif' "'" "../../trf/${species}.fa.2.5.7.80.10.20.7.sorted.als5.c18.mdat \
-         >> ${species}_${motif}-only_re-fmt.sorted.als5.c18.mdat" >> ${species}_1-prepare-flank-15bp.sh
+         > ${species}_${motif}-only_re-fmt.sorted.als5.c18.mdat" >> ${species}_1-prepare-flank-15bp.sh
         echo "cut -f1 ${species}_${motif}-only_re-fmt.sorted.als5.c18.mdat | sort | uniq > ${species}_${motif}-only.list" >> ${species}_1-prepare-flank-15bp.sh 
         echo "faSomeRecords ../../fa/${species}.fa ${species}_${motif}-only.list ${species}_${motif}-only.fasta" >> ${species}_1-prepare-flank-15bp.sh
         echo "bioawk -c fastx '" '{print $name, length($seq) }' "'" "< ${species}_${motif}-only.fasta > ${species}_${motif}-only_length.txt" >> ${species}_1-prepare-flank-15bp.sh
