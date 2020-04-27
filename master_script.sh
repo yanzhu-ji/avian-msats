@@ -30,16 +30,25 @@ while read folder; do
     echo "done" >> 0_trimmomatic_${folder}.sh
 done < all_folders_01.list 
 
+cp 0_trimmomatic_*.sh ../trimmomatic_scripts
+cd trimmomatic_scripts
 i=1
 for job in 0_trimmomatic_*.sh; do
-    if [ $i -gt 10 -a $i -lt 21 ]; then
-        bash $job > ${job}.out 2>&1 &
+#    if [ $i -gt 10 -a $i -lt 21 ]; then
+    if [ $i -gt 20 -a $i -lt 31 ]; then # changed 4.23
         echo $job
+         cp $job ../
         ((i=i+1))
     else
         ((i=i+1))
     fi
 done
+
+cd ..
+for job in 0_trimmomatic_*.sh; do
+    bash $job > ${job}.out 2>&1 &
+done
+
 
 mkdir fa
 cd trimmed_reads
@@ -58,7 +67,7 @@ mkdir done_trimmed-reads
 mv trimmed_reads/*.fq done_trimmed-reads
 cd done_trimmed-reads
 for fq in *.fq; do
-    gzip $fq
+     gzip $fq 
     echo "$fq gzip trimmed fq done"
 done
 cd ..
@@ -154,25 +163,25 @@ for file in `ls ../trf/*.sorted.als5.c18.mdat`; do
         -outfmt 6 \
         -qcov_hsp_perc 100 \
         -out ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 " >> ${species}_2-self-blast.sh
-        echo "silix -i 0.93 -r 0.99 -l 29 -m 0.99 \
-                  ${species}_${motif}-only_cat-flanks_filtered-N.fasta \
-                  ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 \
-                  > ${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
-        echo "mkdir ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo "cd ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo "silix-split ../${species}_${motif}-only_cat-flanks_filtered-N.fasta \
-                  ../${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
-        echo "for i in *.fasta; do " >> ${species}_2-self-blast.sh
-        echo '  num=`grep -c ">" $i`' >> ${species}_2-self-blast.sh
-        echo '  if [ "$num" -le 100 ]; then ' >> ${species}_2-self-blast.sh
-        echo '      head -n2 $i >> ' "../${species}_${motif}-only_cat-flanks_reduced-100.fasta" >> ${species}_2-self-blast.sh
-        echo '  fi' >> ${species}_2-self-blast.sh
-        echo 'done' >> ${species}_2-self-blast.sh
-        echo "cd .." >> ${species}_2-self-blast.sh
-        echo "tar -cf ${species}_${motif}-only_silix_clusters.tar ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo 'if [ $? -eq 0 ]; ' "then rm -r ${species}_${motif}-only_silix_clusters; fi" >> ${species}_2-self-blast.sh 
-        echo "rm ${species}_${motif}-only_cat-flanks_filtered-N.fasta.*" >> ${species}_2-self-blast.sh
-        echo "rm ${species}_${motif}-only_cat-flanks.fasta" >> ${species}_2-self-blast.sh
+        echo "#silix -i 0.93 -r 0.99 -l 29 -m 0.99 \
+              #    ${species}_${motif}-only_cat-flanks_filtered-N.fasta \
+              #    ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 \
+              #    > ${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
+        echo "#mkdir ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo "#cd ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo "#silix-split ../${species}_${motif}-only_cat-flanks_filtered-N.fasta \
+              #    ../${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
+        echo "#for i in *.fasta; do " >> ${species}_2-self-blast.sh
+        echo '#  num=`grep -c ">" $i`' >> ${species}_2-self-blast.sh
+        echo '#  if [ "$num" -le 100 ]; then ' >> ${species}_2-self-blast.sh
+        echo '#      head -n2 $i >> ' "../${species}_${motif}-only_cat-flanks_reduced-100.fasta" >> ${species}_2-self-blast.sh
+        echo '#  fi' >> ${species}_2-self-blast.sh
+        echo '#done' >> ${species}_2-self-blast.sh
+        echo "#cd .." >> ${species}_2-self-blast.sh
+        echo "#tar -cf ${species}_${motif}-only_silix_clusters.tar ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo '#if [ $? -eq 0 ]; ' "then rm -r ${species}_${motif}-only_silix_clusters; fi" >> ${species}_2-self-blast.sh 
+        echo "#rm ${species}_${motif}-only_cat-flanks_filtered-N.fasta.*" >> ${species}_2-self-blast.sh
+        echo "#rm ${species}_${motif}-only_cat-flanks.fasta" >> ${species}_2-self-blast.sh
         echo "cd .." >> ${species}_2-self-blast.sh
         echo "echo $species $motif self blast done" >>  ${species}_2-self-blast.sh
     done < ../../all_motif.list
@@ -260,4 +269,47 @@ while read motif; do
     done < ../../../galGal-${motif}_loci-20.list
     rm -r *_${motif}-only_silix_clusters
     cd ..
-done < ../../all_motif_2_self-blast-done.list
+#done < ../../all_motif_2_self-blast-done.list
+done < ../../AA-AT_motif.list
+
+cat /dev/null > all-motifs_clipped_length.txt
+while read motif; do
+    cd $motif
+    while read galGal_locus; do
+        locusID=`grep $galGal_locus ../../../all_loci_info.txt | cut -f2 `
+        cat *_${locusID}.fasta $YJI_SPACE/bgi/all_species_data/${locusID}_${motif}_all-sp.fasta > ${locusID}_${motif}_combined.fasta
+        mafft --adjustdirection ${locusID}_${motif}_combined.fasta > ${locusID}_${motif}_combined_mafft.fasta
+        python3 $YJI_SPACE/python/clip_msa.py \
+        -i ${locusID}_${motif}_combined_mafft.fasta \
+        -n 15 \
+        > ${locusID}_${motif}_combined_mafft_clipped.fasta
+        sed -i 's/:/./g; s/\//./; s/_/-/g' ${locusID}_${motif}_combined_mafft_clipped.fasta 
+        perl $YJI_SPACE/perl/getLength.pl ${locusID}_${motif}_combined_mafft_clipped.fasta \
+        >> ../all-motifs_clipped_length.txt
+        echo $motif $locus done
+        rm *_${locusID}.fasta
+        rm ${locusID}_${motif}_combined_mafft.fasta
+        rm ${locusID}_${motif}_combined_mafft_clipped.fasta.index
+    done < ../../../galGal-${motif}_loci-20.list
+    cd ..
+done < ../../AA-AT_motif.list
+
+
+perl $YJI_SPACE/perl/reformat_seqLength2STR-FM.pl \
+    all-motifs_clipped_length.txt ../../all_loci_info.txt 5 \
+    > all-motifs_STR-FM-in_d5.txt
+
+python $YJI_SPACE/python/STR-FM/GenotypeTRcorrection_yj.py \
+    all-motifs_STR-FM-in_d5.txt \
+    $YJI_SPACE/python/STR-FM/PCRinclude.allrate.bymajorallele_modified.txt \
+    all-motifs_STR-FM-out_d5.txt \
+    0.5
+sed -i 's/-L/_L/' all-motifs_STR-FM-out_d5.txt 
+
+python ~/lib/STR-FM/GenotypeTRcorrection_yj.py \
+    all-motifs_STR-FM-in_d4.txt \
+    ~/lib/STR-FM/PCRinclude.allrate.bymajorallele_modified.txt \
+    all-motifs_STR-FM-out_d4.txt \
+    0.5
+
+
