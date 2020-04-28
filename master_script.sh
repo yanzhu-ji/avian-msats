@@ -7,6 +7,12 @@ YJI_SPACE=/run/media/qu/7de37f23-d1d5-4201-b381-28d1d2810570/yji/
 cd $YJI_SPACE/bgi/01
 ls -d */ | sed 's/\///' > all_folders_01.list
 
+mkdir raw_fq
+mkdir trimmed_reads
+mkdir B10K_fa
+mkdir fa
+mkdir done_trimmed-reads
+
 while read folder; do
     echo '#!/bin/bash' > 0_trimmomatic_${folder}.sh
     echo "cd $folder" >> 0_trimmomatic_${folder}.sh
@@ -23,11 +29,37 @@ while read folder; do
             trimmed_reads/${base}_p1.fq.gz trimmed_reads/${base}_u1.fq.gz \
             trimmed_reads/${base}_p2.fq.gz trimmed_reads/${base}_u2.fq.gz \
             LEADING:20 TRAILING:20 MINLEN:10' >>  0_trimmomatic_${folder}.sh
-
     echo '
-        echo $base done' >> 0_trimmomatic_${folder}.sh
-    echo "cd $folder" >> 0_trimmomatic_${folder}.sh
-    echo "done" >> 0_trimmomatic_${folder}.sh
+        echo $base trimmomatic done' >> 0_trimmomatic_${folder}.sh
+    echo 'done' >> 0_trimmomatic_${folder}.sh
+    
+    echo "cd ../trimmed_reads" >> 0_trimmomatic_${folder}.sh
+    echo 'speciesNum=0' >> 0_trimmomatic_${folder}.sh
+    echo '
+for file in `ls *.fq.gz`; do
+              base=${file%%.fq.gz}
+              id=${base%%_*}
+              species=`grep $id ../id-species.txt | cut -f2`
+              gunzip $file
+              paste - - - - < ${base}.fq | cut -f1,2 | \
+              sed ' "'" "s/^@/>/" "'" '| tr "\t" "\n" | sed ' "'" "s/ /-/; s/#/-/" "'" ' >  ../B10K_fa/${species}_${base}.fa' >> 0_trimmomatic_${folder}.sh
+    echo '    baseNum=`grep -c ">" ../B10K_fa/${species}_${base}.fa` ' >> 0_trimmomatic_${folder}.sh
+    echo '    ((speciesNum=speciesNum+baseNum))' >> 0_trimmomatic_${folder}.sh
+    echo 'done' >> 0_trimmomatic_${folder}.sh
+
+    echo 'cd ..' >> 0_trimmomatic_${folder}.sh
+    echo 'cat B10K_fa/${species}_*.fa > fa/${species}.fa' >> 0_trimmomatic_${folder}.sh
+
+    echo 'totalNum=`grep -c ">" fa/${species}.fa`' >> 0_trimmomatic_${folder}.sh
+    echo 'if [ "$totalNum" -eq "$speciesNum" ]; then ' >> 0_trimmomatic_${folder}.sh
+    echo '    echo "sequence number matched for $species"' >> 0_trimmomatic_${folder}.sh
+    echo '    rm raw_fq/*.fq' >> 0_trimmomatic_${folder}.sh
+    echo '    rm B10K_fa/*.fa' >> 0_trimmomatic_${folder}.sh
+    echo '    mv trimmed_reads/*.fq done_trimmed-reads/' >> 0_trimmomatic_${folder}.sh
+    echo 'else' >> 0_trimmomatic_${folder}.sh
+    echo '    echo "sequence number doesnt match for $species"' >> 0_trimmomatic_${folder}.sh
+    echo '    exit 1' >> 0_trimmomatic_${folder}.sh
+    echo 'fi' >> 0_trimmomatic_${folder}.sh
 done < all_folders_01.list 
 
 cp 0_trimmomatic_*.sh ../trimmomatic_scripts
@@ -49,22 +81,6 @@ for job in 0_trimmomatic_*.sh; do
     bash $job > ${job}.out 2>&1 &
 done
 
-
-mkdir fa
-cd trimmed_reads
-for file in `ls *.fq.gz`; do
-    base=${file%%.fq.gz}
-    id=${base%%_*}
-    species=`grep $id ../id-species.txt | cut -f2`
-    gunzip $file
-    paste - - - - < ${base}.fq | cut -f1,2 | sed  's/^@/>/' | tr "\t" "\n" | sed 's/ /-/; s/#/-/' >> ../fa/${species}.fa
-    echo "$base done"
-done
-
-rm raw_fq/*.cp.fq
-
-mkdir done_trimmed-reads
-mv trimmed_reads/*.fq done_trimmed-reads
 cd done_trimmed-reads
 for fq in *.fq; do
      gzip $fq 
