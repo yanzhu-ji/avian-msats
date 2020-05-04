@@ -7,67 +7,68 @@ YJI_SPACE=/run/media/qu/7de37f23-d1d5-4201-b381-28d1d2810570/yji/
 cd $YJI_SPACE/bgi/01
 ls -d */ | sed 's/\///' > all_folders_01.list
 
-mkdir raw_fq
-mkdir trimmed_reads
-mkdir B10K_fa
-mkdir fa
+mkdir 00_raw_fq
+mkdir 01_trimmed_reads
+mkdir 02_B10K_fa
+mkdir 03_fa
 mkdir done_trimmed-reads
 
 while read folder; do
     echo '#!/bin/bash' > 0_trimmomatic_${folder}.sh
     echo "cd $folder" >> 0_trimmomatic_${folder}.sh
+    echo 'speciesNum=0' >> 0_trimmomatic_${folder}.sh
     echo 'for file in `ls *.1.fq.gz`; do
         base=${file%%.1.fq.gz}
-        gunzip -c $file  > ../raw_fq/${base}.1.cp.fq
-        gunzip -c ${base}.2.fq.gz > ../raw_fq/${base}.2.cp.fq
-        cd .. ' >> 0_trimmomatic_${folder}.sh
+        gunzip -c $file  > ../00_raw_fq/${base}.1.cp.fq
+        gunzip -c ${base}.2.fq.gz > ../00_raw_fq/${base}.2.cp.fq
+        #cd .. ' >> 0_trimmomatic_${folder}.sh
     echo '
         java -jar /run/media/qu/7de37f23-d1d5-4201-b381-28d1d2810570/share/Trimmomatic-0.39/Trimmomatic-0.39/trimmomatic-0.39.jar \
             PE -threads 4 -phred33 \
-            raw_fq/${base}.1.cp.fq \
-            raw_fq/${base}.2.cp.fq \
-            trimmed_reads/${base}_p1.fq.gz trimmed_reads/${base}_u1.fq.gz \
-            trimmed_reads/${base}_p2.fq.gz trimmed_reads/${base}_u2.fq.gz \
+            ../00_raw_fq/${base}.1.cp.fq \
+            ../00_raw_fq/${base}.2.cp.fq \
+            ../01_trimmed_reads/${base}_p1.fq.gz ../01_trimmed_reads/${base}_u1.fq.gz \
+            ../01_trimmed_reads/${base}_p2.fq.gz ../01_trimmed_reads/${base}_u2.fq.gz \
             LEADING:20 TRAILING:20 MINLEN:10' >>  0_trimmomatic_${folder}.sh
+    echo '
+        id=${base%%_*}
+        species=`grep $id ../id-species.txt | cut -f2` 
+        for file in ../01_trimmed_reads/${base}*.fq.gz; do
+            thisbase0=${file%%.fq.gz}
+            thisbase=${thisbase0##*\/}
+            gunzip $file
+            paste - - - - < ../01_trimmed_reads/${thisbase}.fq | cut -f1,2 | \
+            sed ' "'" "s/^@/>/" "'" '| tr "\t" "\n" | sed ' "'" "s/ /-/; s/#/-/" "'" ' >  ../02_B10K_fa/${species}_${thisbase}.fa
+            baseNum=`grep -c ">" ../02_B10K_fa/${species}_${thisbase}.fa` 
+            ((speciesNum=speciesNum+baseNum))
+        done' >> 0_trimmomatic_${folder}.sh
     echo '
         echo $base trimmomatic done' >> 0_trimmomatic_${folder}.sh
     echo 'done' >> 0_trimmomatic_${folder}.sh
-    
-    echo "cd ../trimmed_reads" >> 0_trimmomatic_${folder}.sh
-    echo 'speciesNum=0' >> 0_trimmomatic_${folder}.sh
-    echo '
-for file in `ls *.fq.gz`; do
-              base=${file%%.fq.gz}
-              id=${base%%_*}
-              species=`grep $id ../id-species.txt | cut -f2`
-              gunzip $file
-              paste - - - - < ${base}.fq | cut -f1,2 | \
-              sed ' "'" "s/^@/>/" "'" '| tr "\t" "\n" | sed ' "'" "s/ /-/; s/#/-/" "'" ' >  ../B10K_fa/${species}_${base}.fa' >> 0_trimmomatic_${folder}.sh
-    echo '    baseNum=`grep -c ">" ../B10K_fa/${species}_${base}.fa` ' >> 0_trimmomatic_${folder}.sh
-    echo '    ((speciesNum=speciesNum+baseNum))' >> 0_trimmomatic_${folder}.sh
-    echo 'done' >> 0_trimmomatic_${folder}.sh
 
     echo 'cd ..' >> 0_trimmomatic_${folder}.sh
-    echo 'cat B10K_fa/${species}_*.fa > fa/${species}.fa' >> 0_trimmomatic_${folder}.sh
+    echo 'cat 02_B10K_fa/${species}_*.fa > 03_fa/${species}.fa' >> 0_trimmomatic_${folder}.sh
 
-    echo 'totalNum=`grep -c ">" fa/${species}.fa`' >> 0_trimmomatic_${folder}.sh
+    echo 'totalNum=`grep -c ">" 03_fa/${species}.fa`' >> 0_trimmomatic_${folder}.sh
     echo 'if [ "$totalNum" -eq "$speciesNum" ]; then ' >> 0_trimmomatic_${folder}.sh
     echo '    echo "sequence number matched for $species"' >> 0_trimmomatic_${folder}.sh
-    echo '    rm raw_fq/*.fq' >> 0_trimmomatic_${folder}.sh
-    echo '    rm B10K_fa/*.fa' >> 0_trimmomatic_${folder}.sh
-    echo '    mv trimmed_reads/*.fq done_trimmed-reads/' >> 0_trimmomatic_${folder}.sh
+    echo '    rm 00_raw_fq/${base}.*.cp.fq' >> 0_trimmomatic_${folder}.sh
+    echo '    rm 02_B10K_fa/${species}_*.fa' >> 0_trimmomatic_${folder}.sh
+    echo '    mv 01_trimmed_reads/${base}_*.fq done_trimmed-reads/' >> 0_trimmomatic_${folder}.sh
     echo 'else' >> 0_trimmomatic_${folder}.sh
     echo '    echo "sequence number doesnt match for $species"' >> 0_trimmomatic_${folder}.sh
     echo '    exit 1' >> 0_trimmomatic_${folder}.sh
     echo 'fi' >> 0_trimmomatic_${folder}.sh
 done < all_folders_01.list 
 
-cp 0_trimmomatic_*.sh ../trimmomatic_scripts
-cd trimmomatic_scripts
+cp 0_trimmomatic_*.sh trim_sh_2
+cd trim_sh_2
 i=1
 for job in 0_trimmomatic_*.sh; do
 #    if [ $i -gt 10 -a $i -lt 21 ]; then
-    if [ $i -gt 20 -a $i -lt 31 ]; then # changed 4.23
+#    if [ $i -gt 20 -a $i -lt 31 ]; then # changed 4.23
+    if [ $i -gt 32 -a $i -lt 46 ]; then # updated 5.3
+#    if [ $i -gt 40 -a $i -lt 41 ]; then # changed 4.23
         echo $job
          cp $job ../
         ((i=i+1))
@@ -90,7 +91,7 @@ cd ..
 
 mkdir trf
 cd trf
-for fasta in `ls ../fa/*.fa`; do
+for fasta in `ls ../03_fa/*.fa`; do
     species0=${fasta%%.fa}
     species=${species0##*/}
     trf_base=${species}.fa.2.5.7.80.10.20.7 
@@ -179,25 +180,25 @@ for file in `ls ../trf/*.sorted.als5.c18.mdat`; do
         -outfmt 6 \
         -qcov_hsp_perc 100 \
         -out ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 " >> ${species}_2-self-blast.sh
-        echo "#silix -i 0.93 -r 0.99 -l 29 -m 0.99 \
-              #    ${species}_${motif}-only_cat-flanks_filtered-N.fasta \
-              #    ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 \
-              #    > ${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
-        echo "#mkdir ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo "#cd ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo "#silix-split ../${species}_${motif}-only_cat-flanks_filtered-N.fasta \
-              #    ../${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
-        echo "#for i in *.fasta; do " >> ${species}_2-self-blast.sh
-        echo '#  num=`grep -c ">" $i`' >> ${species}_2-self-blast.sh
-        echo '#  if [ "$num" -le 100 ]; then ' >> ${species}_2-self-blast.sh
-        echo '#      head -n2 $i >> ' "../${species}_${motif}-only_cat-flanks_reduced-100.fasta" >> ${species}_2-self-blast.sh
-        echo '#  fi' >> ${species}_2-self-blast.sh
-        echo '#done' >> ${species}_2-self-blast.sh
-        echo "#cd .." >> ${species}_2-self-blast.sh
-        echo "#tar -cf ${species}_${motif}-only_silix_clusters.tar ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
-        echo '#if [ $? -eq 0 ]; ' "then rm -r ${species}_${motif}-only_silix_clusters; fi" >> ${species}_2-self-blast.sh 
-        echo "#rm ${species}_${motif}-only_cat-flanks_filtered-N.fasta.*" >> ${species}_2-self-blast.sh
-        echo "#rm ${species}_${motif}-only_cat-flanks.fasta" >> ${species}_2-self-blast.sh
+        echo "silix -i 0.93 -r 0.99 -l 29 -m 0.99 \
+                  ${species}_${motif}-only_cat-flanks_filtered-N.fasta \
+                  ${species}_${motif}-only_cat-flanks_all-v-all.fmt6 \
+                  > ${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
+        echo "mkdir ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo "cd ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo "silix-split ../${species}_${motif}-only_cat-flanks_filtered-N.fasta \
+                  ../${species}_${motif}-only_cat-flanks_silix.fnodes" >> ${species}_2-self-blast.sh
+        echo "for i in *.fasta; do " >> ${species}_2-self-blast.sh
+        echo '  num=`grep -c ">" $i`' >> ${species}_2-self-blast.sh
+        echo '  if [ "$num" -le 100 ]; then ' >> ${species}_2-self-blast.sh
+        echo '      head -n2 $i >> ' "../${species}_${motif}-only_cat-flanks_reduced-100.fasta" >> ${species}_2-self-blast.sh
+        echo '  fi' >> ${species}_2-self-blast.sh
+        echo 'done' >> ${species}_2-self-blast.sh
+        echo "cd .." >> ${species}_2-self-blast.sh
+        echo "tar -cf ${species}_${motif}-only_silix_clusters.tar ${species}_${motif}-only_silix_clusters" >> ${species}_2-self-blast.sh
+        echo 'if [ $? -eq 0 ]; ' "then rm -r ${species}_${motif}-only_silix_clusters; fi" >> ${species}_2-self-blast.sh 
+        echo "rm ${species}_${motif}-only_cat-flanks_filtered-N.fasta.*" >> ${species}_2-self-blast.sh
+        echo "rm ${species}_${motif}-only_cat-flanks.fasta" >> ${species}_2-self-blast.sh
         echo "cd .." >> ${species}_2-self-blast.sh
         echo "echo $species $motif self blast done" >>  ${species}_2-self-blast.sh
     done < ../../all_motif.list
@@ -212,14 +213,17 @@ done < ../../all_motif.list
 while read motif; do
     echo '#!/bin/bash' > ${motif}_3-blast-galGal.sh
     echo "cd $motif" >> ${motif}_3-blast-galGal.sh
-    for file in `ls ../2_self-blast/${motif}/*_reduced-100.fasta`; do
-        filename=${file##*/}
-        species=${filename%_*-only_cat-flanks_reduced-100.fasta}
-        echo "ln -s ../../2_self-blast/${motif}/$filename ." >> ${motif}_3-blast-galGal.sh
-        echo "makeblastdb -dbtype nucl -in $filename " >> ${motif}_3-blast-galGal.sh
+    for file in `ls ../fa/*.fa`; do
+    #for file in `ls ../2_self-blast/${motif}/*_reduced-100.fasta`; do
+        this_file=${file##*/}
+        species=${this_file%%.fa}
+        reduced_fasta=../2_self-blast/${motif}/${species}_${motif}-only_cat-flanks_reduced-100.fa
+        #species=${filename%_*-only_cat-flanks_reduced-100.fasta}
+        echo "ln -s ../../2_self-blast/${motif}/$reduced_fasta ." >> ${motif}_3-blast-galGal.sh
+        echo "makeblastdb -dbtype nucl -in $reduced_fasta " >> ${motif}_3-blast-galGal.sh
         echo "blastn -task blastn \
                   -query $YJI_SPACE/bgi/galGal-${motif}_loci-20.fasta \
-                  -db $filename \
+                  -db $reduced_fasta \
                   -word_size 4 -reward 1 -penalty -1 \
                   -qcov_hsp_perc 100 \
                   -outfmt 6 \
@@ -235,8 +239,8 @@ while read motif; do
         echo "else" >>  ${motif}_3-blast-galGal.sh
         echo "    rm galGal_${species}_${motif}_blastn.fmt6 " >> ${motif}_3-blast-galGal.sh
         echo "fi" >> ${motif}_3-blast-galGal.sh
-        echo "rm $filename " >> ${motif}_3-blast-galGal.sh
-        echo "rm ${filename}.* " >> ${motif}_3-blast-galGal.sh 
+        echo "rm $reduced_fasta " >> ${motif}_3-blast-galGal.sh
+        echo "rm ${reduced_fasta}.* " >> ${motif}_3-blast-galGal.sh 
         echo "rm galGal_${species}_${motif}_blastn_unique-query.list " >> ${motif}_3-blast-galGal.sh
         echo "echo ${species} ${motif} blast galGal done" >> ${motif}_3-blast-galGal.sh
      done 
